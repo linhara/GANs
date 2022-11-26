@@ -27,7 +27,7 @@ class Critic(nn.Module):
                 padding,
                 bias=False,
             ),
-            nn.BatchNorm2d(out_channel),
+            nn.InstanceNorm2d(out_channel, affine=True), #Layernorm in paper
             nn.LeakyReLU(0.2, inplace=True)
         )
 

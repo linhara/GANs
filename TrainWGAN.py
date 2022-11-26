@@ -10,19 +10,22 @@ import time
 import torchvision.utils as vutils
 import numpy as np
 import matplotlib.pyplot as plt
-
+from utils import gradient_penalty
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-LEARNING_RATE = 5e-5
+LEARNING_RATE = 1e-4
 BATCH_SIZE = 64
 IMAGE_SIZE = 64
 CHANNELS_IMG = 1
 Z_DIM = 100
-NUM_EPOCHS = 8
+NUM_EPOCHS = 4
 FEATURES_DISC = 64
 FEATURES_GEN = 64
 CRITIC_ITERATIONS = 5
-WEIGHT_CLIP = 0.01
+LAMBDA_GP = 10
+
+LOAD_PARAMS = False
+SAVE_PARAMS = True
 
 transforms = transforms.Compose(
     [
@@ -39,8 +42,8 @@ critic = Critic(CHANNELS_IMG, FEATURES_DISC).to(DEVICE)
 init_weights(gen)
 init_weights(critic)
 
-opt_gen = optim.RMSprop(gen.parameters(), lr=LEARNING_RATE)
-opt_critic = optim.RMSprop(critic.parameters(), lr=LEARNING_RATE)
+opt_gen = optim.Adam(gen.parameters(), lr=LEARNING_RATE, betas=(0.0,0.9))
+opt_critic = optim.Adam(critic.parameters(), lr=LEARNING_RATE, betas=(0.0,0.9))
 
 fixed_noise = torch.randn(32,Z_DIM,1,1).to(DEVICE)
 #WRITER = SUMMARY WRITER TENSORBOARD
@@ -56,6 +59,17 @@ plt.show()
 print(gen)
 print(critic)
 
+print(f"LOAD_PARAMS is set to: {LOAD_PARAMS} \nSAVE_PARAMS is set to: {SAVE_PARAMS}")
+if LOAD_PARAMS:
+    try:
+        gen.load_state_dict(torch.load("wgangp_genP.pt"))
+        critic.load_state_dict(torch.load("wgangp_criticP.pt"))
+        print("Params loaded")
+    except FileNotFoundError:
+        print("No loadable parameters found, Initializing new params instead")
+
+
+
 gen.train()
 critic.train()
 img_list = []
@@ -70,13 +84,12 @@ for epoch in range(NUM_EPOCHS):
             fake = gen(noise)
             critic_real = critic(real).reshape(-1)
             critic_fake = critic(fake).reshape(-1)
-            loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake))
+            gp = gradient_penalty(critic,real, fake, device=DEVICE)
+            loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake)) + LAMBDA_GP * gp
             critic.zero_grad()
             loss_critic.backward(retain_graph=True)
             opt_critic.step()
 
-            for p in critic.parameters():
-                p.data.clamp_(-WEIGHT_CLIP,WEIGHT_CLIP)
 
         output = critic(fake).reshape(-1)
         loss_gen = -torch.mean(output)
@@ -96,6 +109,9 @@ for epoch in range(NUM_EPOCHS):
         #img_grid_real = vutils.make_grid(real[:32].cpu(), normalize=True)
         #img_grid_real = np.transpose(vutils.make_grid(fake.cpu(), padding=2, normalize=True).cpu(),(1,2,0))
         img_list.append(vutils.make_grid(fake.cpu(), padding=2, normalize=True))
+        if SAVE_PARAMS:
+            torch.save(gen.state_dict(), "wgangp_genP.pt")
+            torch.save(critic.state_dict(), "wgangp_criticP.pt")
         #img_grid_fake = vutils.make_grid(fake[:32].cpu(), normalize=True)
 
             #step += 1
