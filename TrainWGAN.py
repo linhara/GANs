@@ -77,10 +77,11 @@ for epoch in range(NUM_EPOCHS):
     start = time.time()
     for batch_idx, (real, _) in enumerate(loader):
         real = real.to(DEVICE)
+        curr_batch_size = real.shape[0]
         loss_critic = 0
 
         for _ in range(CRITIC_ITERATIONS):
-            noise = torch.randn((BATCH_SIZE, Z_DIM, 1, 1)).to(DEVICE)
+            noise = torch.randn((curr_batch_size, Z_DIM, 1, 1)).to(DEVICE)
             fake = gen(noise)
             critic_real = critic(real).reshape(-1)
             critic_fake = critic(fake).reshape(-1)
@@ -112,6 +113,7 @@ for epoch in range(NUM_EPOCHS):
         if SAVE_PARAMS:
             torch.save(gen.state_dict(), "wgangp_genP.pt")
             torch.save(critic.state_dict(), "wgangp_criticP.pt")
+            print("Current params saved")
         #img_grid_fake = vutils.make_grid(fake[:32].cpu(), normalize=True)
 
             #step += 1
